@@ -1,0 +1,379 @@
+---
+title: "Regressão Linear Simples"
+subtitle: "Trabalho de Estatística III"
+author: "Kauã Dias"
+date: "`r Sys.Date()`"
+output:
+  pdf_document:
+    latex_engine: xelatex
+    toc: true
+    number_sections: true
+    highlight: tango
+    fig_caption: true
+header-includes:
+  - \usepackage{booktabs}
+  - \usepackage{amsmath}
+---
+# **Lendo os pacotes e a base de dados**
+
+```{r warning=FALSE}
+if (!require("ggplot2")) install.packages(ggplot2)
+if (!require("ggthemes")) install.packages(ggthemes)
+if (!require("cowplot")) install.packages(cowplot)
+
+library(ggplot2)
+library(ggthemes)
+library(cowplot)
+```
+
+```{r}
+dados <- read.csv2("dados/dados_regressao.csv", sep = ",")
+```
+
+# **Exploração Inicial dos Dados**
+
+```{r}
+head(dados)
+```
+
+A base possui 5 variáveis e 200 linhas, vamos categoriza-las
+
+```{r}
+str(dados)
+```
+
+Perceba que temos apenas duas variáveis de formato *string*, porém a variável *salario* se encontra erroneamente definida, dado que intuitivamente, o salário se trata de uma variável numérica, vamos arrumar
+
+```{r}
+dados$salario <- as.numeric(dados$salario)
+str(dados)
+```
+
+Observe que o comando arredondou os valores da variável, vamos seguir e desconsiderar. Vamos descrever algumas estatísticas básicas dos dados
+
+```{r}
+summary(dados)
+```
+
+Observe que o menor salário anual é de 33290 na moeda local, o que da 2774 por mês de acordo com
+
+```{r}
+min(dados$salario)/12
+```
+
+E paralelamente o maior salário anual é de 88894, que por mês é 7407.843, de acordo com
+
+```{r}
+max(dados$salario)/12
+```
+
+## Análise do gênero
+
+```{r}
+dados |> 
+  ggplot(aes(x = sexo)) +
+    geom_bar(fill = c("#69b3a2","#ea8967"), color = 'black') +
+    labs(
+      title = "Distribuição por sexo"
+    ) +
+    theme_fivethirtyeight()
+```
+
+Perceba que a base contém um pouco mais de homens do que mulheres.
+
+```{r}
+table(dados$sexo)/nrow(dados)*100
+```
+
+Apenas 3% a mais de homens.
+
+Vamos construir uma função para gerar gráficos para as variáveis numéricas
+
+```{r}
+grafico_dens <- function(dado, pos_var, titulo) {
+  dado |> 
+    ggplot(aes(x = dados[[pos_var]])) +
+    geom_density(
+      aes(y = after_stat(density)),
+          fill = "#69b3a2",
+          alpha = 0.6
+      ) +
+    labs(
+      title = titulo
+    ) +
+    theme_fivethirtyeight()
+}
+```
+
+## Análise da Idade
+
+```{r warning=FALSE}
+grafico_dens(dados, 2, "Curva de densidade por Idade")
+```
+
+Embora a média e mediana da idade se assemelhem, a moda parece se deslocar um pouco mais e isso influencia na pequena assimetria da curva
+
+## Análise dos anos de experiência
+
+```{r warning=FALSE}
+grafico_dens(dados, 3, "Curva de densidade pela Experiência")
+```
+
+Assim como a curva de densidade de Idade, a média e mediana se assemelham bastante, porém a moda diverge e isso causa uma certa assimetria na curva
+
+## Análise dos anos de escolaridade
+
+```{r warning=FALSE}
+grafico_dens(dados, 4, "Curva de densidade pelo tempo de Estudo")
+```
+
+Também apresenta uma assimetria, mesmo que a média $\approx$ mediana $\approx$ moda.
+
+Vamos construir um gráfico boxplot para entender a distribuição desses dados
+
+```{r}
+dados |> 
+  ggplot(aes(x = "", y = salario)) +
+  geom_boxplot(fill = "#69b3a2") +
+  labs(
+      title = "Distribuição do Salário",
+    y = "Salário",
+    x = ""
+  ) +
+  theme_fivethirtyeight() +
+  theme(
+    axis.title = element_text()
+  )
+  
+```
+Em geral os dados se apresentam bem distribuídos, é possível notar que possui um outlier para além do máximo do intervalo interquartil, vamos descobrir em qual linha se encontra
+
+```{r}
+dados[dados$salario %in% boxplot.stats(dados$salario)$out, ]
+```
+
+Observe que a linha é condizente com a realidade dos dados, para além do gênero feminino (que veremos depois uma desvalorização do mercado de trabalho apontada pelo modelo), a escolaridade e a experiência condizem com o salário. Vamos manter o dado já que não se trata de um erro ou coisa do tipo.
+
+## Análise dos salários
+
+```{r warning=FALSE}
+grafico_dens(dados, 5, "Curva de densidade pelo Salário")
+```
+
+A curva de densidade do *Salário* apresenta uma forma mais normal que o resto das variáveis.
+
+# **Relação linear entre as variáveis dos Dados**
+
+Vamos criar uma função para criar gráficos de dispersão do salario em função das demais variáveis numéricas
+
+```{r}
+grafico_disp <- function(dado, pos_var, titulo, nome_var) {
+  dado |> 
+    ggplot(aes(x = dado[[pos_var]], y = salario)) +
+    geom_point() +
+    labs(
+      title = titulo,
+      y = "Salário",
+      x = nome_var
+    ) +
+    theme_fivethirtyeight() +
+    theme(
+      axis.title = element_text()
+    )
+}
+```
+
+## Relação linear entre Salário e Idade
+
+```{r warning=FALSE}
+grafico_disp(dados, 2, "Gráfico de dispersão entre Salário e Idade", "Idade")
+```
+
+O gráfico não apresenta uma relação linear muito forte, porém é notório que o *Salário* tende a aumentar de acordo com a idade, mas com uma variabilidade considerável.
+
+## Relação linear entre Salário e Experiência
+
+```{r warning=FALSE}
+grafico_disp(dados, 3, "Gráfico de dispersão entre Salário e Experiência", "Experiência")
+```
+
+Assim como a variável *Idade*, o *Salário* tende a aumentar de acordo com a experiência, porém com uma menor variabilidade.
+
+## Relação linear entre Salário e Escolaridade
+
+```{r warning=FALSE}
+grafico_disp(dados, 3, "Gráfico de dispersão entre Salário e Escolaridade", "Escolaridade")
+```
+
+Com uma menor variabilidade, o gráfico sugere também uma tendência de aumentar o *Salário* proporcinalmente com a *Escolaridade*.
+
+# **Ajuste do Modelo de Regressão**
+
+A variável escolhida para a construção do modelo será a *Experiência*, pois como vimos, possui uma forte relação linear (o *Salário* tende a aumentar de acordo com a *Experiência*), tem menor variabilidade que as outras variáveis e parece ser uma variável com um poder explicativo maior, pois a experiência tende a ter um impacto mais direto no salário em determinadas áreas.
+
+```{r}
+# Construindo o  modelo
+modelo <- lm(salario ~ experiencia, dados)
+
+# Avaliando o modelo
+summary(modelo)
+```
+
+Os coeficientes fornecem a seguinte equação $${\hat Y} = \theta_1 + \theta_2X,$$ onde $\theta_1, \theta_2$ são o intercepto (quando a *Experiência é zero*) e o coeficiente angular (a inclinação da reta na equação dada), respectivamentes. No contexto dado a equação tem forma $${\hat {salario}} = 40640.6+776\times {\text experiencia}$$.
+
+# **Avaliação do Modelo**
+
+Vamos utilizar o modelo para prever os dados
+
+```{r}
+dados$salario_predit <- predict(modelo, dados)
+```
+
+## Calculando o *EQM, MAE, MAPE*
+
+```{r}
+eqm <- mean((dados$salario - dados$salario_predit)^2)
+mae <- mean(abs(dados$salario - dados$salario_predit))
+mape <- mean(abs(dados$salario - dados$salario_predit)/dados$salario)*100
+print(list(
+  "EQM" = eqm,
+  "MAE" = mae,
+  "MAPE" = mape)
+  )
+```
+
+Como o Erro Quadrático Médio (EQM) é uma métrica mais apropriada para comparação entre diferentes modelos e tem interpretação limitada por estar em uma escala quadrática, focamos nossa análise nas métricas MAE (Erro Absoluto Médio) e MAPE (Erro Percentual Absoluto Médio), que possuem interpretação mais direta.
+
+MAPE $\approx$ 10,43%: Isso significa que, em média, o modelo erra cerca de 10% no valor previsto dos salários. Para muitos contextos de negócios ou estudos sociais, esse é um nível de erro considerado baixo e aceitável, o que indica boa acurácia preditiva.
+
+MAE $\approx$ 5599: O erro médio absoluto nas previsões é de aproximadamente 5.599,00. Dado que os salários na base variam entre 30.000 e 90.000, esse erro representa uma pequena fração do valor total, reforçando a ideia de que o modelo tem um bom desempenho.
+
+Com base nessas métricas, podemos afirmar que o modelo de regressão linear simples utilizando a variável *experiência* como preditora apresenta bom poder preditivo e é adequado para estimar salários dentro do contexto dos dados fornecidos.
+
+Por fim, vamos analisar os valores preditos em função dos valores reais
+
+```{r, warning=FALSE}
+dados |> 
+  ggplot(aes(x = salario_predit, y = salario)) +
+  geom_point(alpha = .7) +
+  geom_abline(intercept = 0,
+              slope = 1,
+              color = "red",
+              linetype = "dashed") +
+  labs(
+    title = "Salário Real vs. Salário Predito",
+    x = "Salário Predito",
+    y = "Salário Real"
+  ) +
+  theme_fivethirtyeight() +
+   theme(
+      axis.title = element_text()
+   )
+```
+O gráfico sugere que os dados estão predominantemente próximos da linha de referência $y = x$, o que indica boa fidelidade do modelo, já que os valores preditos se aproximam dos valores reais. A dispersão é relativamente simétrica em torno da linha, reforçando a consistência das previsões. No entanto, observa-se que nos extremos da distribuição (salários muito altos ou muito baixos), há maior discrepância entre os valores preditos e reais, sugerindo que o modelo apresenta maior variabilidade ou imprecisão em casos extremo.
+
+# **Comparação por Gênero**
+
+Vamos dividir a base de dados por *sexo*:
+
+```{r}
+dados_h <- dados[dados$sexo == "Homem",]
+dados_m <- dados[dados$sexo == "Mulher",]
+```
+
+## Criação do modelo por gênero
+
+```{r}
+modelo_h <- lm(salario ~ experiencia, dados_h)
+modelo_m <- lm(salario ~ experiencia, dados_m)
+
+summary(modelo_h); summary(modelo_m)
+```
+O modelo construído para *Homem* fornece a equação $$\hat {salario}=41728.86 + 733.77 \times experiencia,$$ enquanto que para *Mulher* $$\hat {salario}=39544.51 + 816.86 \times experiencia.$$
+
+A interpretação desses resultados mostra que o intercepto $\theta_1$ é maior para os *Homens*, o que indica que, para zero anos de experiência, o modelo prevê um salário inicial maior para os *Homens* em comparação às *Mulheres*, demonstrando assim, uma valorização maior ao trabalho masculino no início que ao feminino.
+
+Por outro lado, o coeficiente angular $\theta_2$ é maior no modelo feminino, o que sugere que o salário das *Mulheres* cresce mais rapidamente conforme a experiência aumenta. Isso pode ser interpretado como uma valorização proporcional maior da experiência feminina.
+
+## Validação do modelo por gênero
+
+Vamos utilizar o modelo para prever os dados
+
+```{r}
+dados_h$salario_predit <- predict(modelo_h, dados_h)
+dados_m$salario_predit <- predict(modelo_m, dados_m)
+```
+
+## Calculando o *EQM, MAE, MAPE*:
+
+```{r}
+data.frame(
+  "Gênero" = c("Masculino", "Feminino"),
+  "EQM" = c(
+    mean((dados_h$salario - dados_h$salario_predit)^2),
+    mean((dados_m$salario - dados_m$salario_predit)^2)
+  ),
+  "MAE" = c(
+    mean(abs(dados_h$salario - dados_h$salario_predit)),
+    mean(abs(dados_m$salario - dados_m$salario_predit))
+  ),
+  "MAPE" = c(
+    mean(abs(dados_h$salario - dados_h$salario_predit)/dados_h$salario)*100,
+    mean(abs(dados_m$salario - dados_m$salario_predit)/dados_m$salario)*100
+  )
+)
+```
+
+O modelo ajustado para o grupo Masculino apresentou valores ligeiramente menores em todas as métricas de erro (*EQM, MAE e MAPE*), indicando que ele realiza previsões um pouco mais precisas do que o modelo construído para o grupo Feminino.
+
+Apesar dessa diferença, os valores de erro entre os dois grupos são muito próximos, o que sugere que o desempenho dos modelos é semelhante em termos de capacidade preditiva. Dessa forma, não há evidências de que o modelo para um dos gêneros seja significativamente superior ao outro.
+
+Por fim, vamos analisar os valores preditos em função dos valores reais para os modelos por gênero
+
+```{r fig.height=8, fig.width=15, warning=FALSE}
+g1 <- dados_h |>
+  ggplot(aes(x = salario_predit, y = salario)) +
+  geom_point(alpha = .7) +
+  geom_abline(intercept = 0,
+              slope = 1,
+              color = "red",
+              linetype = "dashed") +
+  labs(
+    title = "Salário Real vs. Salário Predito para Homens",
+    x = "Salário Predito",
+    y = "Salário Real"
+  ) +
+  theme_fivethirtyeight() +
+   theme(
+      axis.title = element_text()
+   )
+
+g2 <- dados_h |> 
+  ggplot(aes(x = salario_predit, y = salario)) +
+  geom_point(alpha = .7) +
+  geom_abline(intercept = 0,
+              slope = 1,
+              color = "red",
+              linetype = "dashed") +
+  labs(
+    title = "Salário Real vs. Salário Predito para Mulheres",
+    x = "Salário Predito",
+    y = "Salário Real"
+  ) +
+  theme_fivethirtyeight() +
+   theme(
+      axis.title = element_text()
+   )
+
+plot_grid(g1, g2)
+```
+
+O modelo apresenta um bom desempenho preditivo para ambos os gêneros, com resultados visivelmente semelhantes. Entretanto, observa-se que o modelo para o grupo masculino apresenta desempenho ligeiramente superior, com menor dispersão dos pontos em torno da linha ideal $y = x$ e métricas de erro um pouco menores. Para o grupo feminino, há uma maior variabilidade nas predições, especialmente em faixas salariais mais altas, o que pode indicar uma menor precisão nessas regiões. Uma possível explicação para essa diferença está na distribuição das observações: a base de dados é levemente desbalanceada, contendo aproximadamente 51,5% de observações masculinas e 48,5% femininas. Esse leve desequilíbrio pode impactar a qualidade do ajuste do modelo, favorecendo o grupo mais representado.
+
+# **Interpretação e Conclusões**
+
+Com base nos resultados obtidos, é possível concluir que o modelo de regressão linear simples apresenta um bom desempenho preditivo, tanto no conjunto geral de dados quanto nas divisões por gênero. As métricas de erro (*EQM, MAE e MAPE*) são bastante semelhantes entre os grupos, com o *MAPE* em torno de 10% para ambos, o que indica que o modelo comete, em média, um erro percentual relativamente baixo nas previsões salariais.
+
+A análise dos coeficientes mostra que, segundo o modelo, o mercado tende a atribuir um salário inicial maior aos homens (intercepto mais alto), enquanto o ganho associado à experiência (coeficiente angular) é mais elevado para as mulheres. Isso pode sugerir uma valorização crescente da experiência feminina no mercado de trabalho, embora partindo de um ponto inicial inferior.
+
+Por fim, vale destacar que o modelo pode ser aprimorado com a inclusão de mais observações e, principalmente, com a adição de outras variáveis explicativas que possam captar melhor a complexidade que influencia os salários.
